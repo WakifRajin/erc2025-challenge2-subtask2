@@ -142,8 +142,9 @@ Our approach prioritizes building a robust system that can handle real-world con
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/led-matrix-receiver.git
+mkdir led-matrix-receiver
 cd led-matrix-receiver
+git clone https://github.com/WakifRajin/erc2025-challenge2-subtask2.git
 ```
 
 ### 2. Create Virtual Environment (Recommended)
