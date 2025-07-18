@@ -107,6 +107,8 @@ We're developing:
 
 This challenge represents a modern adaptation of traditional equipment panel tasks, designed for remote competition environments. Our success depends on expertise in embedded systems programming, computer vision, optical communication protocols, and real-time signal processing.
 
+We have provided multiple codes for you to test and verify. For example, each of the folder contains a separate version of the firmware and the corresponding code for the receiver side to detect the password. Each version is tested and verified at different conditions from our side. 
+
 The visual communication system serves as a critical component in the larger robotics challenge, where the decoded password enables access to subsequent tasks. We must balance transmission speed with reliability, as retry attempts require significant time penalties due to course navigation requirements.
 
 Our approach prioritizes building a robust system that can handle real-world conditions while maintaining the speed necessary for competitive scoring. We're focusing on redundancy and error detection to ensure successful transmission on the first attempt.
