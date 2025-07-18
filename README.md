@@ -1,50 +1,50 @@
 # Equipment Panel Challenge - Visual Communication System
 
-## What We're Dealing With
+## Overview
 
-The Equipment Panel challenge is basically a high-tech version of Morse code using LEDs. We need to build a system where an ESP32 controller talks to our robot through a 16×16 LED matrix, sending a 100-character password that we have to decode with our robot's camera. No pressure, but we only get one shot at this.
+The Equipment Panel challenge requires us to develop a one-way visual data transmission system for remote robotics competitions. We'll build both transmitter firmware (ESP32 + LED matrix) and receiver software (robot camera + computer vision) to reliably communicate 100-character passwords through optical signals.
 
-## The Setup We're Working With
+## Challenge Specification
 
-### Hardware
-- **Transmitter**: ESP32 microcontroller driving a 16×16 WS2812B LED matrix (16cm × 16cm)
-- **Receiver**: Our robot's camera plus whatever computer vision magic we can code up
-- **Environment**: Indoor tent with "controlled" lighting (we'll see about that)
-- **LED Layout**: Z-pattern addressing because nothing can be simple
+### Hardware Setup
+- **Transmitter**: ESP32 microcontroller with 16×16 WS2812B LED matrix (16cm × 16cm)
+- **Receiver**: Robot-mounted camera with computer vision processing
+- **Environment**: Indoor tent with controlled lighting, matt black background
+- **Addressing**: Z-pattern pixel arrangement (top row L→R, second row R→L, alternating)
 
-### What We Need to Transmit
-- **Password**: 100 characters of A-Z and 0-9 only
-- **Constraints**: One shot per boot, no do-overs
-- **Timing**: They're literally timing how long our LEDs are on
-- **Backup Plan**: There's a QR code somewhere if we completely fail
+### Data Requirements
+- **Password Format**: 100 characters, uppercase letters (A-Z) and digits (0-9) only
+- **Transmission**: Single attempt per boot cycle, no retransmission allowed
+- **Timing**: Transmission duration measured and scored
+- **Backup**: QR code/printed password available if optical transmission fails
 
-## The Protocol We Have to Follow
+### Communication Protocol
 
-This is where things get strict. We have to follow this exact sequence or we get penalized:
+We must follow this strict handshake protocol managed by the judge-controlled board:
 
 ```
-1. Our ESP32 says "HELLO\n" to the control board
-2. Control board responds "ACK\n"
-3. We tell judges we're ready, they hit START
-4. Our ESP32 says "READY\n"
-5. Control board gives us "PASSWORD:<100-char-password>\n"
-6. We pull up LED_ENABLE_REQUEST pin (timer starts)
-7. We blast our password through the LED matrix
-8. We pull down LED_ENABLE_REQUEST pin (timer stops)
+1. ESP32 → Control Board: "HELLO\n"
+2. Control Board → ESP32: "ACK\n"
+3. [Team reports readiness, judges press START]
+4. ESP32 → Control Board: "READY\n"
+5. Control Board → ESP32: "PASSWORD:<100-char-password>\n"
+6. ESP32 raises LED_ENABLE_REQUEST pin (timer starts)
+7. ESP32 transmits password via LED matrix
+8. ESP32 lowers LED_ENABLE_REQUEST pin (timer stops)
 ```
 
-**The Rules We Can't Break:**
-- Read the password exactly once
-- Turn on the LED matrix exactly once
-- No cheating with external communication
-- Follow the protocol to the letter
+**Critical Requirements:**
+- Password read only once per boot
+- LED matrix enabled only once per boot
+- No external communication except LED matrix
+- Strict protocol adherence required
 
-## Our Technical Approach
+## Our Technical Implementation
 
-### How We're Encoding This
-We're not falling for the 8-bit trap. Since we only have A-Z and 0-9 (36 characters), we can squeeze each character into 6 bits instead of 8. That's a 25% speed boost right there.
+### Encoding Strategy
+We're implementing a 6-bit per character encoding since A-Z,0-9 requires only 36 values (6 bits vs 8 bits). This provides a 25% reduction in transmission time while maintaining reliability.
 
-Our transmission plan:
+Our transmission structure:
 ```
 ┌─────────────────┬──────────────────┬─────────────────┬────────────┐
 │ Startup Pattern │ Length Indicator │ Password Data   │ Checksum   │
@@ -52,63 +52,61 @@ Our transmission plan:
 └─────────────────┴──────────────────┴─────────────────┴────────────┘
 ```
 
-### The Real-World Problems We're Solving
-- **Lighting**: "Controlled" lighting in a tent still means surprises
-- **Camera Issues**: Our camera might decide to auto-expose at the worst moment
-- **Diffuser Drama**: The LED diffuser might make only 25% of pixels usable
-- **Viewing Angles**: Sometimes approaching at an angle works better than straight-on
-- **Color Limits**: We can't just use a rainbow - the camera has limits
+### Real-World Challenges We're Addressing
+- **Variable lighting**: Indoor tent with ambient light interference
+- **Camera exposure**: Risk of over/under-exposure of LED signals
+- **Diffuser effects**: May reduce usable pixels to ~25% of matrix
+- **Viewing angles**: Optimal reception may require non-perpendicular approach
+- **Dynamic range**: Limited distinguishable colors in camera system
 
-## How We're Getting Scored
+## Measurement & Scoring
 
-### What They're Measuring
-1. **Speed**: How fast we can transmit (shorter time = better score)
-2. **Accuracy**: Did we get the password right? (100% or bust)
-3. **Reliability**: Does our system work when conditions suck?
-4. **Protocol Compliance**: Did we follow the rules exactly?
+### Primary Metrics
+1. **Transmission Time**: Duration LED matrix is enabled (measured by control board)
+2. **Accuracy**: Correctness of decoded password (100% required for full points)
+3. **Reliability**: Success rate across different lighting conditions
+4. **Protocol Compliance**: Adherence to communication handshake
 
-### The Scoring System
+### Scoring Framework
 ```
 Base Score = 100 points
 Time Bonus = max(0, 50 - transmission_time_seconds)
-Accuracy Penalty = -50 points per wrong character
-Protocol Violation = -25 points per screw-up
+Accuracy Penalty = -50 points per character error
+Protocol Violation = -25 points per deviation
 ```
 
-### Test Scenarios We're Preparing For
-1. **Best Case**: Perfect lighting, clear diffuser, camera cooperates
-2. **Worst Case**: Terrible diffuser, lighting changes mid-transmission
-3. **Weird Cases**: Extreme angles, high ambient light, Murphy's Law
-4. **Stress Test**: Back-to-back attempts when we're already stressed
+### Test Scenarios
+1. **Optimal Conditions**: Clear diffuser, optimal lighting
+2. **Challenging Conditions**: Heavy diffuser, variable lighting
+3. **Edge Cases**: Extreme viewing angles, high ambient light
+4. **Stress Test**: Multiple consecutive attempts with different passwords
 
-## Our Development Strategy
+## Our Development Approach
 
 ### Transmitter Side (ESP32)
-We're building in:
-- Startup calibration patterns so our camera can adapt
-- Smart brightness control that won't blind the camera
-- Bulletproof error detection with CRC checksums
-- Optimized encoding to minimize transmission time
+We're implementing:
+- Startup calibration patterns for camera adaptation
+- Adaptive brightness control to prevent overexposure
+- Robust error detection using CRC checksums
+- Optimized encoding for minimal transmission time
 
 ### Receiver Side (Robot)
 We're developing:
-- OpenCV pipeline that can actually detect our LEDs
-- Color calibration that adapts to conditions
-- Frame synchronization that doesn't miss beats
-- Error correction because stuff happens
+- OpenCV-based LED detection pipeline
+- Color calibration routines for varying conditions
+- Temporal synchronization for frame capture
+- Error correction algorithms for data integrity
 
-### Our Testing Plan
-1. **Build our own test rig**: We're not going in blind
-2. **Calibration routine**: Test patterns to dial in our settings
-3. **Stress testing**: Every lighting condition we can think of
-4. **Protocol validation**: Make sure we don't get penalized for silly mistakes
+### Testing Strategy
+1. **Build test matrix**: Replicate competition hardware conditions
+2. **Calibration firmware**: Test patterns for optimal settings
+3. **Stress testing**: Various lighting and diffuser configurations
+4. **Protocol validation**: Ensure strict compliance with handshake requirements
 
-## Why This Matters
+## Competition Context
 
-This isn't just about blinking LEDs - it's about building a robust communication system under pressure. We're essentially creating a custom optical modem that has to work perfectly on the first try, in unknown conditions, with hardware we can't adjust once we submit our code.
+This challenge represents a modern adaptation of traditional equipment panel tasks, designed for remote competition environments. Our success depends on expertise in embedded systems programming, computer vision, optical communication protocols, and real-time signal processing.
 
-The password we decode here unlocks the next part of the competition, so failure means we're stuck. No pressure at all.
+The visual communication system serves as a critical component in the larger robotics challenge, where the decoded password enables access to subsequent tasks. We must balance transmission speed with reliability, as retry attempts require significant time penalties due to course navigation requirements.
 
-Our approach balances speed with reliability because there's no point being the fastest team if we can't decode the password correctly. We're building redundancy into our system while keeping it simple enough that we can debug it when things go wrong.
-
-Time to make some LEDs dance.
+Our approach prioritizes building a robust system that can handle real-world conditions while maintaining the speed necessary for competitive scoring. We're focusing on redundancy and error detection to ensure successful transmission on the first attempt.
