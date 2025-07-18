@@ -107,8 +107,297 @@ We're developing:
 
 This challenge represents a modern adaptation of traditional equipment panel tasks, designed for remote competition environments. Our success depends on expertise in embedded systems programming, computer vision, optical communication protocols, and real-time signal processing.
 
-**We have provided multiple codes for you to test and verify. For example, each of the folder contains a separate version of the firmware and the corresponding code for the receiver side to detect the password. Each version is tested and verified at different conditions from our side.**
+## **We have provided multiple codes for you to test and verify. For example, each of the folder contains a separate version of the firmware and the corresponding code for the receiver side to detect the password. Each version is tested and verified at different conditions from our side.**
 
 The visual communication system serves as a critical component in the larger robotics challenge, where the decoded password enables access to subsequent tasks. We must balance transmission speed with reliability, as retry attempts require significant time penalties due to course navigation requirements.
 
 Our approach prioritizes building a robust system that can handle real-world conditions while maintaining the speed necessary for competitive scoring. We're focusing on redundancy and error detection to ensure successful transmission on the first attempt.
+
+## Hardware Requirements
+
+### Camera System
+- USB webcam or integrated camera (minimum 720p recommended)
+- Stable mounting system for consistent viewing angle
+- Adequate lighting (avoid direct sunlight or harsh shadows)
+
+### LED Matrix Setup
+- 16x16 WS2812B LED matrix (16cm x 16cm)
+- Arduino/ESP32 with transmitter firmware
+- 4 corner markers for matrix boundary detection
+- Matt black background recommended
+
+### Positioning
+- Camera distance: 30-100cm from matrix
+- Matrix should occupy 20-60% of camera frame
+- Avoid reflective surfaces and moving objects in background
+
+## Software Requirements
+
+- Python 3.7 or higher
+- OpenCV 4.0 or higher
+- NumPy 1.19 or higher
+- A computer with sufficient processing power for real-time video processing
+
+## Installation
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/yourusername/led-matrix-receiver.git
+cd led-matrix-receiver
+```
+
+### 2. Create Virtual Environment (Recommended)
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+### 3. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+Or install manually:
+```bash
+pip install opencv-python numpy
+```
+
+### 4. Verify Installation
+```bash
+python -c "import cv2, numpy; print('Installation successful!')"
+```
+
+## Quick Start
+
+### 1. Basic Usage
+```python
+from led_matrix_receiver import LEDMatrixReceiver
+
+# Create receiver with debug enabled
+receiver = LEDMatrixReceiver(debug=True)
+
+# Start capture (will run until transmission complete or timeout)
+result = receiver.capture_and_decode(video_source=0, duration=60)
+
+# Check result
+if result:
+    print(f"Password: {result['password']}")
+    print(f"Valid: {result['checksum_valid']}")
+else:
+    print("No transmission received")
+```
+
+### 2. Command Line Usage
+```bash
+# Run with default settings
+python led_matrix_receiver.py
+
+# Run with specific camera
+python led_matrix_receiver.py --camera 1
+
+# Run with custom timeout
+python led_matrix_receiver.py --timeout 120
+```
+
+## Configuration
+
+### Camera Settings
+```python
+receiver = LEDMatrixReceiver(
+    matrix_size=(16, 16),           # Matrix dimensions
+    debug=True,                     # Enable debug visualization
+    brightness_threshold=100,       # LED detection threshold
+    color_similarity_threshold=30,  # Color classification tolerance
+    frame_duration=0.2             # Expected frame duration (seconds)
+)
+```
+
+### Detection Parameters
+```python
+# Adjust these based on your setup
+receiver.min_contour_area = 100      # Minimum LED region size
+receiver.max_contour_area = 50000    # Maximum LED region size
+receiver.brightness_threshold = 100   # Brightness threshold for LED detection
+```
+
+## Usage
+
+### Basic Operation
+
+1. **Setup Hardware**
+   - Position camera to view LED matrix
+   - Ensure good lighting conditions
+   - Start Arduino transmitter
+
+2. **Run Receiver**
+   ```bash
+   python led_matrix_receiver.py
+   ```
+
+3. **Monitor Output**
+   - Debug window shows detection process
+   - Console displays transmission progress
+   - Result saved to `received_password.json`
+
+### Advanced Usage
+
+#### Custom Video Source
+```python
+# Use specific camera
+receiver.capture_and_decode(video_source=1)
+
+# Use video file for testing
+receiver.capture_and_decode(video_source='test_video.mp4')
+```
+
+#### Batch Processing
+```python
+# Process multiple transmissions
+results = []
+for i in range(3):
+    print(f"Capture {i+1}/3 - Press Enter when ready...")
+    input()
+    result = receiver.capture_and_decode(duration=30)
+    results.append(result)
+```
+
+#### Integration with Robot Control
+```python
+import rospy
+from your_robot_msgs.msg import PasswordMsg
+
+def robot_integration():
+    receiver = LEDMatrixReceiver(debug=False)
+    
+    # Position robot in front of matrix
+    # ... robot positioning code ...
+    
+    # Capture password
+    result = receiver.capture_and_decode(duration=45)
+    
+    if result and result['checksum_valid']:
+        # Send password to robot controller
+        pub = rospy.Publisher('/password', PasswordMsg, queue_size=1)
+        msg = PasswordMsg()
+        msg.password = result['password']
+        pub.publish(msg)
+        return True
+    
+    return False
+```
+
+## Protocol Details
+
+### Transmission Sequence
+1. **Startup Patterns** (5 frames)
+   - Full white (brightness calibration)
+   - Checkerboard (pixel differentiation)
+   - Corner markers (alignment)
+   - Quadrant colors (segment identification)
+   - Sync pattern (timing reference)
+
+2. **Length Indicator** (3 frames)
+   - Binary representation of password length
+   - Cyan color for '1' bits, black for '0' bits
+
+3. **Data Transmission** (100 frames for 100-char password)
+   - Each character encoded as 6-bit value
+   - Quadrant encoding: TL(2-bit), TR(2-bit), BL(1-bit), BR(1-bit)
+   - Colors: Black=0, Red=1, Green=2, Blue=3, White=1, Black=0
+
+4. **Checksum** (1 frame)
+   - CRC-8 checksum displayed as 8-bit binary pattern
+   - Yellow for '1' bits, black for '0' bits
+
+5. **End Marker** (1 frame)
+   - Solid purple indicating transmission complete
+
+### Character Encoding
+- A-Z: 0-25 (6-bit values)
+- 0-9: 26-35 (6-bit values)
+- Invalid characters default to 'A' (value 0)
+
+### Error Detection
+- CRC-8 with polynomial 0x07
+- Matches Arduino implementation exactly
+- Transmission marked invalid if checksum fails
+
+## Troubleshooting
+
+### Common Issues
+
+#### "No matrix detected"
+- **Cause**: Camera can't find LED matrix boundaries
+- **Solution**: 
+  - Ensure corner markers are visible and bright
+  - Check camera focus and lighting
+  - Adjust `brightness_threshold` parameter
+  - Move camera closer or farther from matrix
+
+#### "Checksum validation failed"
+- **Cause**: Transmission errors or decoding issues
+- **Solution**:
+  - Check for interference or movement during transmission
+  - Verify lighting is consistent
+  - Ensure camera is stable
+  - Try reducing ambient light
+
+#### "Timeout reached"
+- **Cause**: No transmission detected within time limit
+- **Solution**:
+  - Verify Arduino transmitter is running
+  - Check serial communication on Arduino
+  - Ensure matrix is powered and functioning
+  - Increase timeout duration
+
+#### Poor color detection
+- **Cause**: Lighting conditions or camera settings
+- **Solution**:
+  - Adjust `color_similarity_threshold`
+  - Use diffused lighting
+  - Avoid direct sunlight
+  - Calibrate camera exposure settings
+
+### Debug Mode
+
+Enable debug mode for detailed troubleshooting:
+```python
+receiver = LEDMatrixReceiver(debug=True)
+```
+
+Debug features:
+- Real-time video window with detection overlay
+- Frame-by-frame pattern analysis
+- Console logging of detection process
+- Visual feedback for color classification
+
+### Performance Optimization
+
+#### For Slower Systems
+```python
+# Reduce processing load
+receiver = LEDMatrixReceiver(
+    matrix_size=(16, 16),
+    debug=False,  # Disable visualization
+    brightness_threshold=120,  # Higher threshold
+)
+
+# Use lower camera resolution
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+```
+
+#### For Better Accuracy
+```python
+# Increase processing quality
+receiver = LEDMatrixReceiver(
+    brightness_threshold=80,        # Lower threshold
+    color_similarity_threshold=20,  # Stricter color matching
+    min_contour_area=50,           # Smaller minimum area
+)
+
+# Use higher camera resolution
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+```
+
